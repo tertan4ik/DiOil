@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Корзина</title>
+    <style>
+        body { font-family: sans-serif; background: #f0f2f5; padding: 20px; }
+        .container { max-width: 1000px; margin: auto; background: white; border-radius: 12px; padding: 20px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        .cart-item-img { width: 50px; }
+        button { background: #f59e0b; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; }
+        .total { font-size: 24px; font-weight: bold; margin-top: 20px; text-align: right; }
+        .checkout { background: #10b981; color: white; padding: 12px 24px; border: none; border-radius: 8px; font-size: 16px; margin-top: 20px; cursor: pointer; }
+        a { text-decoration: none; display: inline-block; margin-bottom: 20px; color: #3b82f6; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <a href="index.html">← Назад в каталог</a>
+    <h1>Корзина</h1>
+    <div id="cartContent">Загрузка...</div>
+</div>
+<script>
+    const API = 'http://localhost:5000/api';
+    function getToken() { return localStorage.getItem('token'); }
+
+    async function loadCart() {
+        const token = getToken();
+        if(!token) { document.getElementById('cartContent').innerHTML = '<p>Войдите для просмотра корзины</p>'; return; }
+        const res = await fetch(`${API}/cart`, { headers: { 'Authorization': `Bearer ${token}` } });
+        if(!res.ok) { document.getElementById('cartContent').innerHTML = '<p>Ошибка загрузки</p>'; return; }
+        const { items, total } = await res.json();
+        if(items.length === 0) { document.getElementById('cartContent').innerHTML = '<p>Корзина пуста</p>'; return; }
+        let html = `<table><tr><th>Товар</th><th>Цена</th><th>Кол-во</th><th>Сумма</th><th></th></tr>`;
+        items.forEach(item => {
+            html += `<tr>
+                <td>${item.name}</td>
+                <td>${item.price} ₽ / ${item.unit}</td>
+                <td><input type="number" value="${item.quantity}" min="1" style="width:60px" data-product="${item.product_id}" class="qty"></td>
+                <td>${(item.price * item.quantity).toFixed(2)}</td>
+                <td><button onclick="removeItem(${item.product_id})">Удалить</button></td>
+            </tr>`;
+        });
+        html += `</table><div class="total">Итого: ${total.toFixed(2)} ₽</div>
+                 <button class="checkout" onclick="checkout()">Оформить заказ</button>`;
+        document.getElementById('cartContent').innerHTML = html;
+        // привязка событий изменения количества
+        document.querySelectorAll('.qty').forEach(input => {
+            input.addEventListener('change', async (e) => {
+                const productId = input.dataset.product;
+                const quantity = parseInt(input.value);
+                await fetch(`${API}/cart/${productId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ quantity }) });
+                loadCart();
+            });
+        });
+    }
+
+    window.removeItem = async (productId) => {
+        const token = getToken();
+        await fetch(`${API}/cart/${productId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+        loadCart();
+    };
+
+    window.checkout = async () => {
+        const token = getToken();
+        const cartRes = await fetch(`${API}/cart`, { headers: { 'Authorization': `Bearer ${token}` } });
+        const { items, total } = await cartRes.json();
+        const deliveryAddress = prompt('Введите адрес доставки');
+        if(!deliveryAddress) return;
+        const paymentMethod = prompt('Способ оплаты (card/cash/invoice)', 'card');
+        const orderData = {
+            deliveryAddress,
+            paymentMethod,
+            total,
+            items: items.map(i => ({ productId: i.product_id, quantity: i.quantity, price: i.price }))
+        };
+        const res = await fetch(`${API}/orders`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(orderData) });
+        if(res.ok) { alert('Заказ оформлен!'); loadCart(); }
+        else alert('Ошибка');
+    };
+
+    loadCart();
+</script>
+</body>
+</html>

@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Личный кабинет</title>
+    <style>
+        body { font-family: sans-serif; background: #f0f2f5; padding: 20px; }
+        .container { max-width: 1000px; margin: auto; background: white; border-radius: 12px; padding: 20px; }
+        .section { margin-top: 30px; border-top: 1px solid #ddd; padding-top: 20px; }
+        .favorite-item, .order-item { border: 1px solid #ddd; padding: 10px; margin-bottom: 10px; border-radius: 8px; }
+        button { background: #ef4444; border: none; padding: 4px 12px; border-radius: 6px; cursor: pointer; color: white; }
+        .fav-btn { background: #f59e0b; margin-left: 10px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <a href="index.html">← Назад в каталог</a>
+    <h1>Профиль</h1>
+    <div id="userInfo">Загрузка...</div>
+
+    <div class="section">
+        <h2>Избранное</h2>
+        <div id="favorites">Загрузка...</div>
+    </div>
+
+    <div class="section">
+        <h2>История заказов</h2>
+        <div id="orders">Загрузка...</div>
+    </div>
+</div>
+<script>
+    const API = 'http://localhost:5000/api';
+    function getToken() { return localStorage.getItem('token'); }
+
+    async function loadProfile() {
+        const token = getToken();
+        if(!token) { document.getElementById('userInfo').innerHTML = '<p>Не авторизован. <a href="index.html">Войдите</a></p>'; return; }
+        const userRes = await fetch(`${API}/auth/me`, { headers: { 'Authorization': `Bearer ${token}` } });
+        const user = await userRes.json();
+        document.getElementById('userInfo').innerHTML = `<p><strong>${user.name}</strong><br>${user.email}<br>${user.phone}<br>Роль: ${user.role}</p>`;
+    }
+
+    async function loadFavorites() {
+        const token = getToken();
+        if(!token) return;
+        const res = await fetch(`${API}/favorites`, { headers: { 'Authorization': `Bearer ${token}` } });
+        const favs = await res.json();
+        const container = document.getElementById('favorites');
+        if(favs.length === 0) { container.innerHTML = '<p>Нет избранных товаров</p>'; return; }
+        container.innerHTML = favs.map(p => `
+            <div class="favorite-item">
+                ${p.name} - ${p.price} ₽
+                <button onclick="removeFav(${p.id})">Удалить</button>
+                <button class="fav-btn" onclick="addToCartFromFav(${p.id})">В корзину</button>
+            </div>
+        `).join('');
+    }
+
+    window.removeFav = async (productId) => {
+        const token = getToken();
+        await fetch(`${API}/favorites/${productId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+        loadFavorites();
+    };
+    window.addToCartFromFav = async (productId) => {
+        const token = getToken();
+        await fetch(`${API}/cart`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ productId, quantity: 1 }) });
+        alert('Добавлено в корзину');
+    };
+
+    async function loadOrders() {
+        const token = getToken();
+        if(!token) return;
+        const res = await fetch(`${API}/orders`, { headers: { 'Authorization': `Bearer ${token}` } });
+        const orders = await res.json();
+        const container = document.getElementById('orders');
+        if(orders.length === 0) { container.innerHTML = '<p>Заказов пока нет</p>'; return; }
+        container.innerHTML = orders.map(o => `
+            <div class="order-item">
+                <strong>Заказ #${o.id}</strong> от ${new Date(o.created_at).toLocaleDateString()}<br>
+                Сумма: ${o.total} ₽<br>
+                Статус: ${o.status}<br>
+                Адрес: ${o.delivery_address}<br>
+                Товары: ${o.items.map(i => `${i.name} (${i.quantity} шт)`).join(', ')}
+            </div>
+        `).join('');
+    }
+
+    loadProfile();
+    loadFavorites();
+    loadOrders();
+</script>
+</body>
+</html>

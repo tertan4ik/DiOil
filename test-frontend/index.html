@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Тест каталога</title>
+    <style>
+        body { font-family: sans-serif; background: #f0f2f5; margin: 0; padding: 20px; }
+        .container { max-width: 1200px; margin: auto; background: white; padding: 20px; border-radius: 12px; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #ddd; padding-bottom: 10px; }
+        .cart-link { background: #f59e0b; padding: 8px 16px; border-radius: 8px; text-decoration: none; color: black; }
+        .filters { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        .filters input, .filters select { padding: 8px; border-radius: 8px; border: 1px solid #ccc; }
+        .products { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; }
+        .product { border: 1px solid #ddd; padding: 15px; border-radius: 12px; background: white; }
+        .product h3 { margin: 0 0 8px; font-size: 18px; }
+        .price { font-size: 20px; font-weight: bold; color: #f59e0b; margin: 10px 0; }
+        button { background: #f59e0b; border: none; padding: 8px 12px; border-radius: 8px; cursor: pointer; margin-right: 8px; }
+        .stock { font-size: 14px; margin: 5px 0; }
+        .in-stock { color: green; }
+        .out-stock { color: red; }
+        #authInfo { background: #e2e8f0; padding: 8px 12px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+        .token { font-size: 12px; word-break: break-all; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>DiOil Каталог</h1>
+        <a href="cart.html" class="cart-link">Корзина</a>
+        <a href="profile.html" class="cart-link" style="background:#3b82f6;">Профиль</a>
+        <a href="admin.html" class="cart-link" style="background:#ef4444;">Админка</a>
+    </div>
+    <div id="authInfo">
+        <span>Статус: <span id="loginStatus">Не авторизован</span></span>
+        <span id="userEmail"></span>
+        <div>
+            <input type="text" id="loginEmail" placeholder="Email" value="test@test.ru">
+            <input type="password" id="loginPassword" placeholder="Пароль" value="123456">
+            <button id="loginBtn">Войти</button>
+            <button id="logoutBtn" style="display:none;">Выйти</button>
+        </div>
+    </div>
+    <div class="filters">
+        <input type="text" id="search" placeholder="Поиск...">
+        <select id="category">
+            <option value="all">Все категории</option>
+            <option value="1">Топливо</option>
+            <option value="2">Моторные масла</option>
+            <option value="3">Смазки</option>
+        </select>
+        <label><input type="checkbox" id="inStockOnly"> Только в наличии</label>
+        <button id="applyFilters">Применить</button>
+    </div>
+    <div id="products" class="products">Загрузка...</div>
+</div>
+<script>
+    let currentUser = null;
+    const API = 'http://localhost:5000/api';
+
+    function getToken() { return localStorage.getItem('token'); }
+    function setToken(token) { if(token) localStorage.setItem('token', token); else localStorage.removeItem('token'); }
+    function updateUI() {
+        const token = getToken();
+        if(token) {
+            document.getElementById('loginStatus').innerText = 'Авторизован';
+            document.getElementById('logoutBtn').style.display = 'inline-block';
+            document.getElementById('loginBtn').style.display = 'none';
+            // получить данные пользователя
+            fetch(`${API}/auth/me`, { headers: { 'Authorization': `Bearer ${token}` } })
+                .then(r => r.json())
+                .then(u => { if(u.email) document.getElementById('userEmail').innerText = u.email; });
+        } else {
+            document.getElementById('loginStatus').innerText = 'Не авторизован';
+            document.getElementById('logoutBtn').style.display = 'none';
+            document.getElementById('loginBtn').style.display = 'inline-block';
+            document.getElementById('userEmail').innerText = '';
+            currentUser = null;
+        }
+    }
+
+    document.getElementById('loginBtn').onclick = async () => {
+        const email = document.getElementById('loginEmail').value;
+        const password = document.getElementById('loginPassword').value;
+        const res = await fetch(`${API}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
+        if(res.ok) {
+            const data = await res.json();
+            setToken(data.token);
+            currentUser = data.user;
+            updateUI();
+            loadProducts();
+        } else alert('Ошибка входа');
+    };
+    document.getElementById('logoutBtn').onclick = () => { setToken(null); updateUI(); loadProducts(); };
+
+    async function loadProducts() {
+        const search = document.getElementById('search').value;
+        const category = document.getElementById('category').value;
+        const inStockOnly = document.getElementById('inStockOnly').checked;
+        let url = `${API}/products?`;
+        if(search) url += `search=${encodeURIComponent(search)}&`;
+        if(category !== 'all') url += `category=${category}&`;
+        if(inStockOnly) url += `inStock=true&`;
+        const res = await fetch(url);
+        const products = await res.json();
+        const container = document.getElementById('products');
+        if(!products.length) { container.innerHTML = '<p>Нет товаров</p>'; return; }
+        container.innerHTML = products.map(p => `
+            <div class="product">
+                <h3>${p.name}</h3>
+                <p>${p.description || ''}</p>
+                <div class="price">${p.price} ₽ / ${p.unit}</div>
+                <div class="stock ${p.stock_quantity > 0 ? 'in-stock' : 'out-stock'}">${p.stock_quantity > 0 ? '✅ В наличии' : '❌ Нет'}</div>
+                <button onclick="addToCart(${p.id})" ${p.stock_quantity <= 0 ? 'disabled' : ''}>В корзину</button>
+                <button onclick="addToFav(${p.id})">❤️ В избранное</button>
+            </div>
+        `).join('');
+    }
+
+    window.addToCart = async (productId) => {
+        const token = getToken();
+        if(!token) { alert('Сначала войдите'); return; }
+        const res = await fetch(`${API}/cart`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ productId, quantity: 1 }) });
+        if(res.ok) alert('Добавлено в корзину'); else alert('Ошибка');
+    };
+    window.addToFav = async (productId) => {
+        const token = getToken();
+        if(!token) { alert('Сначала войдите'); return; }
+        const res = await fetch(`${API}/favorites`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ productId }) });
+        if(res.ok) alert('Добавлено в избранное'); else alert('Ошибка');
+    };
+
+    document.getElementById('applyFilters').onclick = loadProducts;
+    loadProducts();
+    updateUI();
+</script>
+</body>
+</html>
