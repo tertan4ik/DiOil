@@ -11,6 +11,9 @@ const categoryRoutes = require('./src/routes/categoryRoutes');
 const unitRoutes = require('./src/routes/unitRoutes');
 const brandRoutes = require('./src/routes/brandRoutes');
 const adminRoutes = require('./src/routes/adminRoutes');
+const feedbackRoutes = require('./src/routes/feedbackRoutes');
+// ... после других маршрутов
+
 
 const app = express();
 app.use(cors());
@@ -22,7 +25,7 @@ app.use('/api/products', productRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/units', unitRoutes);
 app.use('/api/brands', brandRoutes);
-
+app.use('/api/feedback', feedbackRoutes);
 // Защищённые маршруты
 app.use('/api/cart', cartRoutes);
 app.use('/api/favorites', favoriteRoutes);
@@ -47,7 +50,7 @@ app.use((req, res, next) => {
 });
 
 const PORT = process.env.APP_PORT || 5000;
-const HOST = process.env.APP_IP || '0.0.0.0';
+const HOST = process.env.APP_IP || 'localhost';
 
 app.listen(PORT, HOST, () => {
     console.log(`Server running on http://${HOST}:${PORT}`);
