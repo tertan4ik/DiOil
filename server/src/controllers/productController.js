@@ -53,10 +53,9 @@ exports.getProductById = async (req, res) => {
     }
 };
 
-// Админские методы
 exports.getAllProductsAdmin = async (req, res) => {
     try {
-        const { category, search, inStock, archived } = req.query;
+        const { category, search, inStock, archived, sortBy, sortOrder } = req.query;
         let query = `
             SELECT p.*, u.name as unit_name, b.name as brand_name
             FROM products p
@@ -71,7 +70,7 @@ exports.getAllProductsAdmin = async (req, res) => {
         }
         if (search) {
             params.push(`%${search}%`);
-            query += ` AND p.name ILIKE $${params.length}`;
+            query += ` AND (p.name ILIKE $${params.length} OR p.sku ILIKE $${params.length})`;
         }
         if (inStock === 'true') {
             query += ' AND p.stock_quantity > 0';
@@ -81,7 +80,12 @@ exports.getAllProductsAdmin = async (req, res) => {
         } else if (archived === 'false') {
             query += ' AND p.is_archived = false';
         }
-        query += ' ORDER BY p.id';
+        // Сортировка
+        const allowedSortFields = ['id', 'name', 'price', 'stock_quantity', 'created_at'];
+        const sortField = allowedSortFields.includes(sortBy) ? sortBy : 'id';
+        const order = sortOrder === 'asc' ? 'ASC' : 'DESC';
+        query += ` ORDER BY ${sortField} ${order}`;
+        
         const result = await pool.query(query, params);
         res.json(result.rows);
     } catch (err) {

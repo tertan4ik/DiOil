@@ -1,8 +1,10 @@
 const express = require('express');
 const authenticateToken = require('../middleware/auth');
 const { isAdmin, isAdminOrManager } = require('../middleware/roleCheck');
-const { getUsers, updateUser, deleteUser, getAllOrders, updateOrderStatus, getStats } = require('../controllers/adminController');
+const { getUsers, updateUser, deleteUser, getAllOrders, updateOrderStatus, getStats,getAdvancedStats } = require('../controllers/adminController');
 const { getAllProductsAdmin, createProduct, updateProduct, deleteProduct, restoreProduct } = require('../controllers/productController');
+// ... внутри после других маршрутов
+
 const upload = require('../middleware/upload');
 const fs = require('fs');
 const path = require('path');
@@ -12,13 +14,13 @@ const router = express.Router();
 
 // Все маршруты требуют аутентификации
 router.use(authenticateToken);
-
 // ========== ТОВАРЫ ==========
 router.get('/products', isAdminOrManager, getAllProductsAdmin);
 router.post('/products', isAdminOrManager, createProduct);
 router.put('/products/:id', isAdminOrManager, updateProduct);
 router.delete('/products/:id', isAdminOrManager, deleteProduct); // архивирование
 // server/src/routes/adminRoutes.js
+router.get('/stats/advanced', isAdminOrManager, getAdvancedStats);
 
 // ...
 
@@ -63,20 +65,21 @@ router.delete('/delete-image', isAdminOrManager, (req, res) => {
         res.json({ success: true });
     });
 });
-
+const isProductInOrders = async (productId) => {
+    const result = await pool.query('SELECT id FROM order_items WHERE product_id = $1 LIMIT 1', [productId]);
+    return result.rows.length > 0;
+};
 // Физическое удаление товара (только админ)
 router.delete('/products/:id/permanent', isAdmin, async (req, res) => {
     const productId = req.params.id;
     const client = await pool.connect();
     try {
+        if (await isProductInOrders(productId)) {
+            return res.status(400).json({ error: 'Нельзя удалить товар, который есть в заказах' });
+        }
         await client.query('BEGIN');
-        // Удаляем товар из корзины пользователей
         await client.query('DELETE FROM cart WHERE product_id = $1', [productId]);
-        // Удаляем товар из избранного пользователей
         await client.query('DELETE FROM favorites WHERE product_id = $1', [productId]);
-        // В заказах заменяем product_id на NULL, чтобы не терять историю заказов
-        await client.query('UPDATE order_items SET product_id = NULL WHERE product_id = $1', [productId]);
-        // Теперь можно удалить сам товар
         const result = await client.query('DELETE FROM products WHERE id = $1 RETURNING id', [productId]);
         if (result.rowCount === 0) {
             await client.query('ROLLBACK');
