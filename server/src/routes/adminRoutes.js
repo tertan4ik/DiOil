@@ -69,6 +69,45 @@ const isProductInOrders = async (productId) => {
     const result = await pool.query('SELECT id FROM order_items WHERE product_id = $1 LIMIT 1', [productId]);
     return result.rows.length > 0;
 };
+
+
+
+// Восстановление товара из архива
+// Восстановление товара из архива
+router.put('/products/:id/restore', isAdminOrManager, async (req, res) => {
+    try {
+        const result = await pool.query(
+            'UPDATE products SET is_archived = false WHERE id = $1 RETURNING id',
+            [req.params.id]
+        );
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: 'Товар не найден' });
+        }
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Restore error:', err);
+        res.status(500).json({ error: 'Ошибка восстановления' });
+    }
+});
+// Архивирование товара (мягкое удаление) – доступно админу и менеджеру
+router.delete('/products/:id', isAdminOrManager, async (req, res) => {
+    const productId = req.params.id;
+    try {
+        // При архивации товар не должен быть в корзинах и избранном пользователей
+        await pool.query('DELETE FROM cart WHERE product_id = $1', [productId]);
+        await pool.query('DELETE FROM favorites WHERE product_id = $1', [productId]);
+        // Устанавливаем флаг is_archived = true
+        const result = await pool.query('UPDATE products SET is_archived = true WHERE id = $1 RETURNING id', [productId]);
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: 'Товар не найден' });
+        }
+        res.json({ success: true, message: 'Товар архивирован' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Ошибка архивации товара' });
+    }
+});
+// Добавить в существующий файл после маршрутов заказов
 // Физическое удаление товара (только админ)
 router.delete('/products/:id/permanent', isAdmin, async (req, res) => {
     const productId = req.params.id;
@@ -96,25 +135,7 @@ router.delete('/products/:id/permanent', isAdmin, async (req, res) => {
     }
 });
 
-// Архивирование товара (мягкое удаление) – доступно админу и менеджеру
-router.delete('/products/:id', isAdminOrManager, async (req, res) => {
-    const productId = req.params.id;
-    try {
-        // При архивации товар не должен быть в корзинах и избранном пользователей
-        await pool.query('DELETE FROM cart WHERE product_id = $1', [productId]);
-        await pool.query('DELETE FROM favorites WHERE product_id = $1', [productId]);
-        // Устанавливаем флаг is_archived = true
-        const result = await pool.query('UPDATE products SET is_archived = true WHERE id = $1 RETURNING id', [productId]);
-        if (result.rowCount === 0) {
-            return res.status(404).json({ error: 'Товар не найден' });
-        }
-        res.json({ success: true, message: 'Товар архивирован' });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Ошибка архивации товара' });
-    }
-});
-// Добавить в существующий файл после маршрутов заказов
+
 
 // Удаление заказа (только админ)
 router.delete('/orders/:id', isAdmin, async (req, res) => {
