@@ -44,7 +44,7 @@ class Order {
         const result = await pool.query(
             `SELECT o.*,
                 COALESCE(
-                    (SELECT json_agg(json_build_object('name', p.name, 'quantity', oi.quantity, 'price', oi.price_at_moment, 'unit_name', u.name))
+                    (SELECT json_agg(json_build_object('product_id', oi.product_id, 'name', p.name, 'quantity', oi.quantity, 'price', oi.price_at_moment, 'unit_name', u.name))
                      FROM order_items oi
                      JOIN products p ON oi.product_id = p.id
                      LEFT JOIN units u ON p.unit_id = u.id
@@ -64,7 +64,7 @@ class Order {
         const result = await pool.query(
             `SELECT o.*, u.name as user_name, u.email as user_email,
                 COALESCE(
-                    (SELECT json_agg(json_build_object('name', p.name, 'quantity', oi.quantity, 'price', oi.price_at_moment))
+                    (SELECT json_agg(json_build_object('product_id', oi.product_id, 'name', p.name, 'quantity', oi.quantity, 'price', oi.price_at_moment))
                      FROM order_items oi
                      JOIN products p ON oi.product_id = p.id
                      WHERE oi.order_id = o.id),

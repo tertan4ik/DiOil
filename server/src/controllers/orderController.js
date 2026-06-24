@@ -2,9 +2,6 @@ const pool = require('../config/db'); // импорт подключения к 
 const Order = require('../models/Order');
 const Cart = require('../models/Cart');
 
-const Order = require('../models/Order');
-const pool = require('../config/db'); // для прямых запросов
-
 exports.createOrder = async (req, res) => {
     const { deliveryType, deliveryAddress, paymentMethod, items, total } = req.body;
     const client = await pool.connect();
